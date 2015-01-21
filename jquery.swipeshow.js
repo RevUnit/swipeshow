@@ -122,7 +122,7 @@
       friction: 0.3,
       mouse: true,
       keys: true,
-      swipeThreshold: { distance: 10, time: 400 }
+      swipeThreshold: { distance: 10, time: 400, slope: 0.25 }
     },
 
     unbind: function() {
@@ -384,6 +384,7 @@
       var origin;
       var start;
       var delta;
+      var slope;
       var lastTouch;
       var minDelta; // Minimum change for it to take effect.
 
@@ -425,7 +426,7 @@
 
         width  = $slideshow.width();
         moving = true;
-        origin = { x: null };
+        origin = { x: null, y: null };
         start  = { x: getOffset($container), started: c.isStarted() };
         delta  = 0;
         lastTouch = null;
@@ -441,13 +442,16 @@
 
         // X can sometimes be NaN because the touch event may not have any X/Y info.
         var x = getX(e);
-        if (isNaN(x)) return;
+        var y = getY(e);
+        if (isNaN(x) || isNaN(y)) return;
 
         // Regord the first touch now. on a touchmove, not a touchstart. They
         // sometimes return different x/y coordinates.
         if (origin.x === null) origin.x = x;
+        if (origin.y === null) origin.y = y;
 
         delta = x - origin.x;
+        slope = Math.abs((origin.y - y) / (origin.x - x))
 
         // When swiping was triggered on a button, it should be harder to swipe from.
         if (Math.abs(delta) <= minDelta) delta = 0;
@@ -467,14 +471,20 @@
         // know how long it's been since
         lastTouch = +new Date();
         
-        setOffset($container, target, 0);
+        if (withinSlope(slope, options))
+          setOffset($container, target, 0);
       });
+
+      function withinSlope(slope, options) {
+        return (Math.min(slope, options.swipeThreshold.slope) == slope);
+      }
 
       $(document).on('touchend'+tag + (options.mouse ? ' mouseup'+tag : ''), function(e) {
         if (ss.disabled) return;
         if ($container.is(':animated')) return;
         if (!moving) return;
         if (isFlash(e)) return;
+        if (!withinSlope(slope, options)) return;
 
         var left  = getOffset($container);
 
@@ -620,11 +630,21 @@
    */
 
   function getX(e) {
-    if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches[0])
-      return e.originalEvent.touches[0].clientX;
+    return getCoordinate("X", e);
+  }
 
-    if (e.clientX)
-      return e.clientX;
+  function getY(e) {
+    return getCoordinate("Y", e);
+  }
+
+  function getCoordinate(axis, e) {
+    method = "client"+axis.toUpperCase();
+
+    if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches[0])
+      return e.originalEvent.touches[0][method];
+
+    if (e[method])
+      return e[method]
   }
 
   /**
